@@ -27,4 +27,54 @@ class RAGEvaluator:
         rouge_scores = [scorer.score(ref, cand) for ref, cand in zip(references, candidates)]
         rouge1 = sum([score['rouge1'].fmeasure for score in rouge_scores]) / len(rouge_scores)
         return bleu_score, rouge1
-      
+       def evaluate_bert_score(self, candidates, references):
+        P, R, F1 = score(candidates, references, lang="en", model_type='bert-base-multilingual-cased')
+        return P.mean().item(), R.mean().item(), F1.mean().item()
+
+    def evaluate_perplexity(self, text):
+        encodings = self.gpt2_tokenizer(text, return_tensors='pt')
+        max_length = self.gpt2_model.config.n_positions
+        stride = 512
+        lls = []
+        for i in range(0, encodings.input_ids.size(1), stride):
+            begin_loc = max(i + stride - max_length, 0)
+            end_loc = min(i + stride, encodings.input_ids.size(1))
+            trg_len = end_loc - i
+            input_ids = encodings.input_ids[:, begin_loc:end_loc]
+            target_ids = input_ids.clone()
+            target_ids[:, :-trg_len] = -100
+            with torch.no_grad():
+                outputs = self.gpt2_model(input_ids, labels=target_ids)
+                log_likelihood = outputs[0] * trg_len
+            lls.append(log_likelihood)
+        ppl = torch.exp(torch.stack(lls).sum() / end_loc)
+        return ppl.item()
+
+    def evaluate_diversity(self, texts):
+        all_tokens = [tok for text in texts for tok in text.split()]
+        unique_bigrams = set(ngrams(all_tokens, 2))
+        diversity_score = len(unique_bigrams) / len(all_tokens) if all_tokens else 0
+        return diversity_score
+
+    def evaluate_racial_bias(self, text):
+        results = self.bias_pipeline([text], candidate_labels=["hate speech", "not hate speech"])
+        bias_score = results[0]['scores'][results[0]['labels'].index('hate speech')]
+        return bias_score
+
+    def evaluate_meteor(self, candidates, references):
+        nltk.download('punkt', quiet=True)  
+        
+        meteor_scores = [
+            meteor_score([word_tokenize(ref)], word_tokenize(cand))
+            for ref, cand in zip(references, candidates)
+        ]
+        return sum(meteor_scores) / len(meteor_scores)
+    
+    def evaluate_chrf(self, candidates, references):
+        chrf_scores = [sentence_chrf(ref, cand) for ref, cand in zip(references, candidates)]
+        return sum(chrf_scores) / len(chrf_scores)
+    
+    def evaluate_readability(self, text):
+        flesch_ease = flesch_reading_ease(text)
+        flesch_grade = flesch_kincaid_grade(text)
+        return flesch_ease, flesch_grade   
