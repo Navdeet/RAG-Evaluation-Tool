@@ -78,3 +78,28 @@ class RAGEvaluator:
         flesch_ease = flesch_reading_ease(text)
         flesch_grade = flesch_kincaid_grade(text)
         return flesch_ease, flesch_grade   
+    def evaluate_all(self, response, reference):
+        candidates = [response]
+        references = [reference]
+        bleu, rouge1 = self.evaluate_bleu_rouge(candidates, references)
+        bert_p, bert_r, bert_f1 = self.evaluate_bert_score(candidates, references)
+        perplexity = self.evaluate_perplexity(response)
+        diversity = self.evaluate_diversity(candidates)
+        racial_bias = self.evaluate_racial_bias(response)
+        meteor = self.evaluate_meteor(candidates, references)
+        chrf = self.evaluate_chrf(candidates, references)
+        flesch_ease, flesch_grade = self.evaluate_readability(response)
+        return {
+            "BLEU": bleu,
+            "ROUGE-1": rouge1,
+            "BERT P": bert_p,
+            "BERT R": bert_r,
+            "BERT F1": bert_f1,
+            "Perplexity": perplexity,
+            "Diversity": diversity,
+            "Racial Bias": racial_bias,
+            "METEOR": meteor,
+            "CHRF": chrf,
+            "Flesch Reading Ease": flesch_ease,
+            "Flesch-Kincaid Grade": flesch_grade,
+        }
